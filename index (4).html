@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Pharmacy Stockout Risk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky slim header; hero splits into pitch (left) and live risk explorer (right); then pipeline, watchlist table, stack and status. Single column on phones. */
+:root{
+  --bg:#f3f6f5; --surface:#ffffff; --ink:#12201d; --muted:#56655f; --line:#d6dfdc;
+  --pine:#0f5a4d; --pine-ink:#ffffff; --risk:#c4381a; --warn:#b97b00; --ok:#2a7a4b;
+  --risk-bg:#fbe9e4; --warn-bg:#faf0d9; --ok-bg:#e3f2e9;
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --body:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0c1412; --surface:#121e1b; --ink:#e5eeeb; --muted:#93a59f; --line:#25352f;
+  --pine:#4fc2a8; --pine-ink:#08201a; --risk:#ff7d5a; --warn:#e3ad3c; --ok:#5cc58a;
+  --risk-bg:#3a1c14; --warn-bg:#33290f; --ok-bg:#12301f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1412; --surface:#121e1b; --ink:#e5eeeb; --muted:#93a59f; --line:#25352f;
+  --pine:#4fc2a8; --pine-ink:#08201a; --risk:#ff7d5a; --warn:#e3ad3c; --ok:#5cc58a;
+  --risk-bg:#3a1c14; --warn-bg:#33290f; --ok-bg:#12301f; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6;padding-inline:20px}
+a{color:var(--pine)}
+:focus-visible{outline:3px solid var(--pine);outline-offset:2px}
+.wrap{max-width:1120px;margin-inline:auto}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.brand i{width:22px;height:22px;border-radius:6px;background:var(--pine);display:inline-block;position:relative}
+.brand i::after{content:"";position:absolute;left:5px;right:5px;top:10px;height:2px;background:var(--pine-ink)}
+.brand i::before{content:"";position:absolute;top:5px;bottom:5px;left:10px;width:2px;background:var(--pine-ink)}
+nav{display:flex;gap:20px;font-size:14px;flex-wrap:wrap;align-items:center}
+nav a{text-decoration:none;color:var(--muted)}
+nav a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;font-weight:600;font-size:15px;text-decoration:none;border:1px solid var(--pine);background:var(--pine);color:var(--pine-ink)}
+.btn.ghost{background:transparent;color:var(--pine)}
+nav a.btn{color:var(--pine-ink);padding:7px 14px;font-size:14px}
+
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:48px;padding-block:56px 40px;align-items:start}
+.eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--pine)}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(34px,5vw,56px);line-height:1.04;letter-spacing:-.02em;margin:14px 0 18px;text-wrap:balance}
+.lede{font-size:18px;color:var(--muted);max-width:52ch}
+.cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:34px;padding-top:22px;border-top:1px solid var(--line)}
+.facts b{display:block;font-family:var(--mono);font-weight:500;font-size:14px}
+.facts span{font-size:13.5px;color:var(--muted)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:0 1px 0 var(--line)}
+.panel h2{font-family:var(--display);font-size:20px;margin:0 0 4px}
+.panel .sub{font-size:13.5px;color:var(--muted);margin:0 0 18px}
+.ctl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;margin-bottom:14px}
+.ctl label{font-size:14px;font-weight:500}
+.ctl output{font-family:var(--mono);font-size:14px;text-align:right}
+.ctl input{grid-column:1/-1;width:100%;accent-color:var(--pine);margin:4px 0 0}
+.result{border-top:1px solid var(--line);margin-top:8px;padding-top:18px}
+.gauge-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pct{font-family:var(--display);font-weight:700;font-size:48px;line-height:1;letter-spacing:-.02em}
+.pill{font-family:var(--mono);font-size:12.5px;font-weight:500;padding:4px 10px;border-radius:999px;letter-spacing:.04em;text-transform:uppercase}
+.pill.risk{background:var(--risk-bg);color:var(--risk)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.bar{height:10px;border-radius:5px;background:var(--line);margin:14px 0 4px;position:relative;overflow:hidden}
+.bar>div{height:100%;border-radius:5px;transition:width .25s}
+.bar-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.stats div{font-size:12.5px;color:var(--muted)}
+.stats b{display:block;font-family:var(--mono);font-weight:500;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+.note{font-size:12.5px;color:var(--muted);margin:16px 0 0}
+
+section{padding-block:44px;border-top:1px solid var(--line)}
+section>h2{font-family:var(--display);font-size:clamp(26px,3.4vw,34px);letter-spacing:-.015em;margin:0 0 8px;text-wrap:balance}
+section>p.intro{color:var(--muted);max-width:62ch;margin:0 0 28px}
+.steps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;counter-reset:s}
+.steps li{counter-increment:s;padding-top:14px;border-top:3px solid var(--pine)}
+.steps li::before{content:"Step " counter(s);font-family:var(--mono);font-size:12px;color:var(--pine);letter-spacing:.06em;text-transform:uppercase}
+.steps h3{font-family:var(--display);font-size:18px;margin:6px 0}
+.steps p{font-size:14.5px;color:var(--muted);margin:0}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14.5px}
+th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-family:var(--mono);font-weight:500;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+tr:last-child td{border-bottom:0}
+td button{all:unset;cursor:pointer;color:var(--pine);font-weight:600;font-size:13.5px}
+td button:focus-visible{outline:3px solid var(--pine);outline-offset:2px;border-radius:3px}
+tr.sel td{background:var(--bg)}
+
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}
+.cols h3{font-family:var(--display);font-size:18px;margin:0 0 10px}
+.cols ul{margin:0;padding-left:18px;color:var(--muted);font-size:14.5px}
+.cols li{margin-bottom:6px}
+.tag{font-family:var(--mono);font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;display:inline-block;margin:0 6px 8px 0;background:var(--surface)}
+.road{display:grid;gap:0;max-width:720px}
+.road div{display:grid;grid-template-columns:96px minmax(0,1fr);gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:15px}
+.road span{font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;padding-top:3px}
+.road .done{color:var(--ok)} .road .next{color:var(--warn)} .road .later{color:var(--muted)}
+footer{padding-block:32px 48px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+@media (max-width:900px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:32px;padding-block:36px 24px}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:520px){
+  .steps{grid-template-columns:minmax(0,1fr)}
+  .facts,.stats{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .pct{font-size:40px}
+  .panel{padding:18px}
+}
+@media (prefers-reduced-motion:reduce){.bar>div{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><i aria-hidden="true"></i>Pharmacy Stockout Risk</div>
+    <nav aria-label="Sections">
+      <a href="#explorer">Risk explorer</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#watchlist">Watchlist</a>
+      <a href="#status">Status</a>
+      <a class="btn" href="https://github.com/HadisaMaryam/Pharmacy-stockout-risk-prediction">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero" id="explorer">
+    <div>
+      <div class="eyebrow">Machine learning for pharmacy inventory</div>
+      <h1>Know which medicines will run out before they do.</h1>
+      <p class="lede">This project predicts the chance that a product stocks out before its next delivery arrives, so pharmacists can reorder the right items first and keep essential medicines on the shelf.</p>
+      <div class="cta">
+        <a class="btn" href="#watchlist">See a sample watchlist</a>
+        <a class="btn ghost" href="https://github.com/HadisaMaryam/Pharmacy-stockout-risk-prediction">View the repository</a>
+      </div>
+      <div class="facts">
+        <div><b>Days of cover</b><span>Stock on hand divided by daily demand</span></div>
+        <div><b>Lead time</b><span>Days between ordering and receiving</span></div>
+        <div><b>Reorder point</b><span>Stock level that should trigger an order</span></div>
+      </div>
+    </div>
+
+    <div class="panel" aria-labelledby="exp-h">
+      <h2 id="exp-h">Stockout risk explorer</h2>
+      <p class="sub" id="exp-sub">Example product: Amoxicillin 500 mg capsules. Move the sliders to see how risk changes.</p>
+      <div class="ctl"><label for="stock">Stock on hand</label><output id="o-stock" for="stock"></output>
+        <input type="range" id="stock" min="0" max="600" step="5" value="180"></div>
+      <div class="ctl"><label for="mean">Average daily demand</label><output id="o-mean" for="mean"></output>
+        <input type="range" id="mean" min="1" max="40" step="1" value="22"></div>
+      <div class="ctl"><label for="cv">Demand variability</label><output id="o-cv" for="cv"></output>
+        <input type="range" id="cv" min="5" max="80" step="1" value="35"></div>
+      <div class="ctl"><label for="lead">Supplier lead time</label><output id="o-lead" for="lead"></output>
+        <input type="range" id="lead" min="1" max="21" step="1" value="7"></div>
+      <div class="result" aria-live="polite">
+        <div class="gauge-row"><div class="pct" id="pct">0%</div><span class="pill" id="pill">Low</span></div>
+        <div class="bar" role="img" aria-label="Stockout probability bar"><div id="fill"></div></div>
+        <div class="bar-scale"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+        <div class="stats">
+          <div>Days of cover<b id="s-cover"></b></div>
+          <div>Demand during lead time<b id="s-ltd"></b></div>
+          <div>Reorder point (95%)<b id="s-rop"></b></div>
+        </div>
+        <p class="note">Probability that demand over the lead time exceeds stock on hand, assuming normally distributed daily demand. This is a transparent baseline. The trained model will learn richer patterns from sales history.</p>
+      </div>
+    </div>
+  </div>
+
+  <section id="pipeline">
+    <h2>From sales history to a reorder decision</h2>
+    <p class="intro">The project follows the path a pharmacy analyst would take by hand, then automates it and measures how well it works.</p>
+    <ol class="steps">
+      <li><h3>Collect</h3><p>Daily dispensing and stock records per product, supplier lead times and delivery history.</p></li>
+      <li><h3>Engineer features</h3><p>Rolling demand averages, variability, days of cover, weekday and seasonal effects, recent stockouts.</p></li>
+      <li><h3>Predict</h3><p>A classifier estimates the probability of stocking out within the next lead time window for each product.</p></li>
+      <li><h3>Decide</h3><p>Products are ranked by risk with a plain-language reason, so the order list is ready each morning.</p></li>
+    </ol>
+  </section>
+
+  <section id="watchlist">
+    <h2>Sample watchlist</h2>
+    <p class="intro">Six example products ranked by stockout risk using the baseline formula above. The figures are illustrative and are not real pharmacy data. Select a row to load it into the explorer.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Product</th><th class="n">On hand</th><th class="n">Daily demand</th><th class="n">Lead time</th><th class="n">Cover (days)</th><th class="n">Risk</th><th>Status</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="stack">
+    <h2>What goes into the model</h2>
+    <p class="intro">Planned inputs and tooling. Each choice favors methods that pharmacy staff can inspect and question.</p>
+    <div class="cols">
+      <div><h3>Signals</h3><ul>
+        <li>Rolling 7, 14 and 28 day demand</li>
+        <li>Demand variability per product</li>
+        <li>Days of cover against lead time</li>
+        <li>Weekday and seasonal patterns</li>
+        <li>Supplier delay history</li></ul></div>
+      <div><h3>Evaluation</h3><ul>
+        <li>Time-based train and test split, never random</li>
+        <li>Precision and recall at the top of the ranked list</li>
+        <li>Calibration of predicted probabilities</li>
+        <li>Comparison against the formula baseline</li></ul></div>
+      <div><h3>Planned tooling</h3>
+        <span class="tag">Python</span><span class="tag">pandas</span><span class="tag">scikit-learn</span><span class="tag">gradient boosting</span><span class="tag">SHAP</span><span class="tag">Jupyter</span></div>
+    </div>
+  </section>
+
+  <section id="status">
+    <h2>Project status</h2>
+    <p class="intro">The repository is at its first commit. Data, notebooks and trained models are not published yet.</p>
+    <div class="road">
+      <div><span class="done">Done</span>Project website and risk explorer</div>
+      <div><span class="next">Next</span>Add a dataset (or a documented synthetic generator) and a data dictionary</div>
+      <div><span class="next">Next</span>Exploratory notebook and formula baseline</div>
+      <div><span class="later">Later</span>Trained classifier with time-based evaluation</div>
+      <div><span class="later">Later</span>Daily ranked reorder report for pharmacists</div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Pharmacy Stockout Risk Prediction by HadisaMaryam</span>
+    <a href="https://github.com/HadisaMaryam/Pharmacy-stockout-risk-prediction">github.com/HadisaMaryam/Pharmacy-stockout-risk-prediction</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  function erf(x){var s=x<0?-1:1;x=Math.abs(x);var t=1/(1+0.3275911*x);
+    var y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+  function phi(z){return 0.5*(1+erf(z/Math.SQRT2));}
+  function calc(stock,mean,cv,lead){
+    var mu=mean*lead, sd=mean*(cv/100)*Math.sqrt(lead);
+    var p=sd>0?1-phi((stock-mu)/sd):(stock<mu?1:0);
+    return {p:p,mu:mu,rop:mu+1.645*sd,cover:mean>0?stock/mean:0};
+  }
+  function level(p){return p>=0.5?['risk','High']:p>=0.15?['warn','Watch']:['ok','Low'];}
+  var $=function(id){return document.getElementById(id)};
+  var ids=['stock','mean','cv','lead'];
+  function render(){
+    var v={};ids.forEach(function(i){v[i]=+$(i).value});
+    $('o-stock').textContent=v.stock+' units';
+    $('o-mean').textContent=v.mean+' units/day';
+    $('o-cv').textContent=v.cv+'%';
+    $('o-lead').textContent=v.lead+' days';
+    var r=calc(v.stock,v.mean,v.cv,v.lead), l=level(r.p);
+    $('pct').textContent=Math.round(r.p*100)+'%';
+    var pill=$('pill');pill.className='pill '+l[0];pill.textContent=l[1]+' risk';
+    var f=$('fill');f.style.width=Math.max(2,r.p*100)+'%';
+    f.style.background='var(--'+l[0]+')';
+    $('s-cover').textContent=r.cover.toFixed(1)+' d';
+    $('s-ltd').textContent=Math.round(r.mu)+' units';
+    $('s-rop').textContent=Math.round(r.rop)+' units';
+  }
+  ids.forEach(function(i){$(i).addEventListener('input',render)});
+
+  var items=[
+    {n:'Amoxicillin 500 mg capsules',s:180,m:22,c:35,l:7},
+    {n:'Metformin 500 mg tablets',s:640,m:30,c:20,l:5},
+    {n:'Salbutamol inhaler 100 mcg',s:35,m:6,c:55,l:10},
+    {n:'Insulin glargine pen 100 U/mL',s:24,m:4,c:40,l:6},
+    {n:'Paracetamol 500 mg tablets',s:900,m:60,c:30,l:4},
+    {n:'Omeprazole 20 mg capsules',s:150,m:14,c:25,l:9}
+  ];
+  items.forEach(function(it){it.r=calc(it.s,it.m,it.c,it.l)});
+  items.sort(function(a,b){return b.r.p-a.r.p});
+  var tb=$('rows');
+  items.forEach(function(it,idx){
+    var l=level(it.r.p), tr=document.createElement('tr');
+    tr.innerHTML='<td>'+it.n+'</td><td class="n">'+it.s+'</td><td class="n">'+it.m+'</td><td class="n">'+it.l+' d</td><td class="n">'+it.r.cover.toFixed(1)+
+      '</td><td class="n">'+Math.round(it.r.p*100)+'%</td><td><span class="pill '+l[0]+'">'+l[1]+'</span></td><td><button type="button">Explore</button></td>';
+    tr.querySelector('button').addEventListener('click',function(){
+      $('stock').value=it.s;$('mean').value=it.m;$('cv').value=it.c;$('lead').value=it.l;
+      $('exp-sub').textContent='Example product: '+it.n+'. Move the sliders to see how risk changes.';
+      Array.prototype.forEach.call(tb.children,function(x){x.classList.remove('sel')});tr.classList.add('sel');
+      render();$('explorer').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    });
+    tb.appendChild(tr);
+  });
+  render();
+})();
+</script>
+
+</body>
+</html>
